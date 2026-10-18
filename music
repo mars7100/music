@@ -1,0 +1,46 @@
+#!/bin/zsh
+
+set -euo pipefail
+
+if (( $# == 0 )); then
+    print -u2 -- "usage: music <search terms | url>"
+    exit 1
+fi
+
+for command in mpv yt-dlp fzf; do
+    if (( ! $+commands[$command] )); then
+        print -u2 -- "music: required command not found: $command"
+        exit 1
+    fi
+done
+
+input="$*"
+
+if [[ "$input" == http://* || "$input" == https://* ]]; then
+    print -u2 -- "mpv: Space/p pause, q quit, Left/Right seek, 9/0 volume, [/] speed"
+    exec mpv --no-video --input-ipc-server="$HOME/.cache/mpv-music.sock" -- "$input"
+fi
+
+if ! records=$(yt-dlp --flat-playlist \
+    --print $'%(webpage_url)s\t%(title)s' \
+    -- "ytsearch15:$input"); then
+    print -u2 -- "music: YouTube search failed"
+    exit 1
+fi
+
+[[ -z "$records" ]] && exit 0
+
+selected=$(print -r -- "$records" | fzf \
+    --delimiter=$'\t' \
+    --with-nth=2 \
+    --prompt='music> ' \
+    --height=90% \
+    --border) || exit 0
+
+[[ -z "$selected" ]] && exit 0
+
+url="${selected%%$'\t'*}"
+[[ -n "$url" ]] || exit 1
+
+print -u2 -- "mpv: Space/p pause, q quit, Left/Right seek, 9/0 volume, [/] speed"
+exec mpv --no-video --input-ipc-server="$HOME/.cache/mpv-music.sock" -- "$url"
